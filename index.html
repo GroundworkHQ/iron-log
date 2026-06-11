@@ -137,6 +137,7 @@
   .sync-status b{color:var(--accent);}
   .sync-note{font-family:'Space Mono';font-size:10px;color:var(--muted);margin-top:11px;line-height:1.55;}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -287,19 +288,19 @@ async function saveData(){
 /* ---------------- Cloud sync (Supabase) ----------------
    Paste your two values from Supabase → Project Settings → API.
    Leave both blank to run local-only (no sync).                */
-const SUPABASE_URL="";
-const SUPABASE_ANON_KEY="";
+const SUPABASE_URL="https://kdgbivcufoarmvckworj.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkZ2JpdmN1Zm9hcm12Y2t3b3JqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5NDU1OTIsImV4cCI6MjA5NjUyMTU5Mn0.6dce94KWoA38dyisoLY9jZ-Ao8O5DjwaB-gUVJL-CC4";
 let supa=null, cloudUser=null, pushTimer=null;
 
 async function initCloud(){
   if(!SUPABASE_URL||!SUPABASE_ANON_KEY){ renderSyncUI(); return; }
   try{
-    const m=await import('https://esm.sh/@supabase/supabase-js@2');
-    supa=m.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    if(!window.supabase||!window.supabase.createClient){ throw new Error('Supabase library not loaded'); }
+    supa=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
     const { data:{ session } }=await supa.auth.getSession();
     if(session){ cloudUser=session.user; await pullCloud(true); }
     supa.auth.onAuthStateChange((_e,s)=>{ cloudUser=s?.user||null; renderSyncUI(); });
-  }catch(e){ console.warn('cloud init failed',e); }
+  }catch(e){ console.warn('cloud init failed',e); const n=document.getElementById('syncNote'); if(n)n.textContent='Could not load sync library — check that your browser/ad-blocker isn\'t blocking jsdelivr.net.'; }
   renderSyncUI();
 }
 function schedulePush(){ if(!supa||!cloudUser)return; clearTimeout(pushTimer); pushTimer=setTimeout(pushCloud,800); }
