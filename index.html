@@ -167,12 +167,8 @@
     <h2>Cloud Sync</h2>
     <div class="sub">Carry your data across devices</div>
     <div id="syncSignedOut">
-      <div class="field txt" style="margin-bottom:8px"><input id="syncEmail" type="email" inputmode="email" placeholder="email" autocomplete="username"></div>
-      <div class="field txt" style="margin-bottom:12px"><input id="syncPass" type="password" placeholder="password" autocomplete="current-password"></div>
-      <div class="sync-btns">
-        <button class="mini-btn" id="signInBtn">SIGN IN</button>
-        <button class="mini-btn ghost" id="signUpBtn">CREATE</button>
-      </div>
+      <div class="field txt" style="margin-bottom:12px"><input id="syncEmail" type="email" inputmode="email" placeholder="email" autocomplete="email"></div>
+      <button class="mini-btn" id="magicBtn" style="width:100%">EMAIL ME A SIGN-IN LINK</button>
       <div class="sync-note" id="syncNote"></div>
     </div>
     <div id="syncSignedIn" class="hidden">
@@ -299,7 +295,11 @@ async function initCloud(){
     supa=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
     const { data:{ session } }=await supa.auth.getSession();
     if(session){ cloudUser=session.user; await pullCloud(true); }
-    supa.auth.onAuthStateChange((_e,s)=>{ cloudUser=s?.user||null; renderSyncUI(); });
+    supa.auth.onAuthStateChange(async (event,s)=>{
+      cloudUser=s?.user||null;
+      if(cloudUser && (event==='SIGNED_IN'||event==='INITIAL_SESSION')){ await pullCloud(true); }
+      renderSyncUI();
+    });
   }catch(e){ console.warn('cloud init failed',e); const n=document.getElementById('syncNote'); if(n)n.textContent='Could not load sync library — check that your browser/ad-blocker isn\'t blocking jsdelivr.net.'; }
   renderSyncUI();
 }
@@ -329,21 +329,17 @@ async function pullCloud(preferNewer){
   }catch(e){ console.warn('pull failed',e); toast('Sync error'); }
   renderSyncUI();
 }
-async function cloudAuth(mode){
+async function sendMagicLink(){
   if(!supa){ toast('Add your Supabase keys first'); return; }
   const email=document.getElementById('syncEmail').value.trim();
-  const pass=document.getElementById('syncPass').value;
-  if(!email||!pass){ toast('Enter email + password'); return; }
+  if(!email){ toast('Enter your email'); return; }
   try{
-    const res = mode==='up'
-      ? await supa.auth.signUp({email,password:pass})
-      : await supa.auth.signInWithPassword({email,password:pass});
-    if(res.error)throw res.error;
-    cloudUser=res.data.user;
-    if(mode==='up'&&!res.data.session){ document.getElementById('syncNote').textContent='Check your email to confirm, then Sign In.'; renderSyncUI(); return; }
-    await pullCloud(true); toast('Signed in ✓');
-  }catch(e){ toast(e.message||'Auth failed'); }
-  renderSyncUI();
+    const redirect=window.location.href.split('#')[0];
+    const { error }=await supa.auth.signInWithOtp({ email, options:{ emailRedirectTo:redirect } });
+    if(error)throw error;
+    document.getElementById('syncNote').textContent='Link sent — open the email on this device and tap it. You\'ll come right back here, signed in.';
+    toast('Magic link sent ✓');
+  }catch(e){ toast(e.message||'Could not send link'); }
 }
 async function cloudSignOut(){ if(supa)await supa.auth.signOut(); cloudUser=null; renderSyncUI(); toast('Signed out'); }
 function renderSyncUI(){
@@ -572,8 +568,7 @@ function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t
     document.querySelectorAll('.bar-opt').forEach(o=>o.classList.remove('on'));el.classList.add('on');
     document.getElementById('barW').value=el.dataset.bar;calcPlates();});
   ['targetW','barW'].forEach(idf=>document.getElementById(idf).addEventListener('input',calcPlates));
-  document.getElementById("signInBtn").onclick=()=>cloudAuth('in');
-  document.getElementById("signUpBtn").onclick=()=>cloudAuth('up');
+  document.getElementById("magicBtn").onclick=sendMagicLink;
   document.getElementById("signOutBtn").onclick=cloudSignOut;
   document.getElementById("syncNowBtn").onclick=()=>pullCloud(false);
   initCloud();
