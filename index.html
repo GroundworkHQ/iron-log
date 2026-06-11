@@ -207,6 +207,13 @@
     <div class="deload-bar"><div class="deload-fill" id="deloadFill"></div></div>
     <button class="mini-btn deload-reset" id="deloadReset">I DELOADED — RESET</button>
   </div>
+
+  <div class="block">
+    <h2>Form Videos</h2>
+    <div class="sub">Which channel the ▶ links open</div>
+    <select id="channelPick"></select>
+    <div class="field txt hidden" id="customChanWrap" style="margin-top:4px"><input id="customChan" placeholder="@handle or channel URL"></div>
+  </div>
 </section>
 
 <!-- PLATES -->
@@ -274,6 +281,7 @@ async function loadData(){
   if(!DATA.exercises)DATA.exercises={};
   if(!DATA.bodyweight)DATA.bodyweight=[];
   if(!DATA.deload)DATA.deload={lastReset:null};
+  if(DATA.formChannel===undefined)DATA.formChannel="";
 }
 async function saveData(){
   DATA.updatedAt=Date.now();
@@ -352,12 +360,57 @@ function renderSyncUI(){
   const n=document.getElementById('syncNote');
   if(!supa&&n&&!n.textContent)n.textContent='Cloud not configured yet — running local-only.';
 }
-function refreshAll(){ try{renderList();}catch(_){}try{populateLiftPicker();}catch(_){}try{renderBwChart();}catch(_){}try{renderDeload();}catch(_){} }
+function refreshAll(){ try{renderList();}catch(_){}try{populateLiftPicker();}catch(_){}try{renderBwChart();}catch(_){}try{renderDeload();}catch(_){}try{renderChannelPick();}catch(_){} }
 
 /* ---------------- Helpers ---------------- */
 const todayStr=()=>new Date().toISOString().slice(0,10);
 const prettyDate=()=>new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
-const formLink=n=>"https://www.youtube.com/results?search_query="+encodeURIComponent(n+" proper form technique");
+function normChannel(v){
+  v=(v||"").trim();
+  if(!v) return "";
+  if(v.includes('youtube.com/')){ const seg=v.split('youtube.com/')[1].split(/[?#]/)[0].replace(/\/+$/,''); return seg; }
+  return v.startsWith('@')?v:('@'+v.replace(/^@/,''));
+}
+function channelTerm(){
+  const v=DATA.formChannel||"";
+  if(!v) return "";
+  const preset=CHANNELS.find(c=>c.val===v && c.val!=="__custom");
+  return preset ? preset.label : v.replace(/^@/,'');
+}
+function formLink(n){
+  const t=channelTerm();
+  return "https://www.youtube.com/results?search_query="+encodeURIComponent(n+" proper form"+(t?(" "+t):" technique"));
+}
+const CHANNELS=[
+  {label:"All of YouTube", val:""},
+  {label:"Jeff Nippard", val:"@JeffNippard"},
+  {label:"Athlean-X", val:"@athleanx"},
+  {label:"Jeremy Ethier", val:"@JeremyEthier"},
+  {label:"Squat University", val:"@SquatUniversity"},
+  {label:"Renaissance Periodization", val:"@RenaissancePeriodization"},
+  {label:"Custom channel…", val:"__custom"},
+];
+function renderChannelPick(){
+  const sel=document.getElementById("channelPick"); if(!sel)return;
+  sel.innerHTML="";
+  CHANNELS.forEach(c=>{const o=document.createElement("option");o.value=c.val;o.textContent=c.label;sel.appendChild(o);});
+  const cur=DATA.formChannel||"";
+  const wrap=document.getElementById("customChanWrap"), cin=document.getElementById("customChan");
+  const preset=CHANNELS.find(c=>c.val===cur && c.val!=="__custom");
+  if(cur && !preset){ sel.value="__custom"; wrap.classList.remove("hidden"); cin.value=cur; }
+  else { sel.value=cur; wrap.classList.add("hidden"); }
+}
+function onChannelChange(){
+  const v=document.getElementById("channelPick").value;
+  const wrap=document.getElementById("customChanWrap");
+  if(v==="__custom"){ wrap.classList.remove("hidden"); document.getElementById("customChan").focus(); return; }
+  wrap.classList.add("hidden");
+  DATA.formChannel=v; saveData(); renderList(); toast(v?"Form videos set ✓":"Form videos: all of YouTube");
+}
+function onCustomChan(){
+  DATA.formChannel=normChannel(document.getElementById("customChan").value);
+  saveData(); renderList();
+}
 const lastEntry=id=>{const h=DATA.exercises[id]?.history;return h&&h.length?h[h.length-1]:null;};
 const todayEntry=id=>{const h=DATA.exercises[id]?.history;return h?h.find(e=>e.date===todayStr())||null:null;};
 
@@ -563,6 +616,9 @@ function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t
   document.getElementById("bwBtn").onclick=logBw;
   document.getElementById("deloadReset").onclick=resetDeload;
   document.getElementById("liftPick").onchange=renderLiftChart;
+  document.getElementById("channelPick").onchange=onChannelChange;
+  document.getElementById("customChan").addEventListener('input',onCustomChan);
+  renderChannelPick();
   document.querySelectorAll('.mode').forEach(el=>el.onclick=()=>setMode(el.dataset.mode));
   document.querySelectorAll('.bar-opt').forEach(el=>el.onclick=()=>{
     document.querySelectorAll('.bar-opt').forEach(o=>o.classList.remove('on'));el.classList.add('on');
